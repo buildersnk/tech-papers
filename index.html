@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tech Papers — Viewer</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    header h1 {
+      font-size: 15px;
+      margin: 0;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    select {
+      flex: 1;
+      min-width: 220px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 14px;
+    }
+    a.open-new {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    a.open-new:hover { text-decoration: underline; }
+    #frame {
+      flex: 1;
+      width: 100%;
+      border: 0;
+      background: #fff;
+    }
+    #status {
+      padding: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📄 Tech Papers</h1>
+    <select id="picker" aria-label="Choose a page to view">
+      <option>Loading pages…</option>
+    </select>
+    <a id="openNew" class="open-new" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+  </header>
+  <div id="status"></div>
+  <iframe id="frame" title="Embedded page"></iframe>
+
+  <script>
+    // --- Config: auto-detected from the URL when served on GitHub Pages ---
+    // Override here if you ever fork/rename.
+    const OWNER = "buildersnk";
+    const REPO = "tech-papers";
+    const BRANCH = "main";
+
+    const picker = document.getElementById("picker");
+    const frame = document.getElementById("frame");
+    const status = document.getElementById("status");
+    const openNew = document.getElementById("openNew");
+    const SELF = "index.html";
+
+    function show(file) {
+      if (!file) return;
+      frame.src = file;
+      openNew.href = file;
+      location.hash = encodeURIComponent(file);
+    }
+
+    picker.addEventListener("change", () => show(picker.value));
+
+    async function loadList() {
+      const api = `https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`;
+      try {
+        const res = await fetch(api);
+        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+        const data = await res.json();
+        const files = data.tree
+          .filter(n => n.type === "blob" && n.path.toLowerCase().endsWith(".html"))
+          .map(n => n.path)
+          .filter(p => p !== SELF)
+          .sort();
+
+        if (!files.length) {
+          status.textContent = "No .html files found in the repository.";
+          picker.innerHTML = "<option>No pages</option>";
+          return;
+        }
+
+        picker.innerHTML = files
+          .map(f => `<option value="${f}">${f}</option>`)
+          .join("");
+
+        // Honor a #file in the URL, else show the first page.
+        const wanted = decodeURIComponent(location.hash.slice(1));
+        const start = files.includes(wanted) ? wanted : files[0];
+        picker.value = start;
+        show(start);
+        status.textContent = "";
+      } catch (err) {
+        status.innerHTML =
+          `Could not auto-load the file list (${err.message}).<br>` +
+          `This page lists files via the GitHub API and works best when opened through ` +
+          `<strong>GitHub Pages</strong>. Add files manually below if needed.`;
+        picker.innerHTML = "<option>Unavailable</option>";
+      }
+    }
+
+    loadList();
+  </script>
+</body>
+</html>

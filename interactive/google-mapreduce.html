@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MapReduce — Interactive Explainer</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Serif:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<style>
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-dim: #f0f0f3;
+  --on-surface: #1c1b1f;
+  --on-surface-dim: #5f5e62;
+  --on-surface-faint: #93929a;
+  --primary: #1a73e8;
+  --primary-light: #e8f0fe;
+  --primary-dark: #1557b0;
+  --secondary: #e8eaed;
+  --error: #d93025;
+  --success: #1e8e3e;
+  --warning: #f9ab00;
+  --teal: #00897b;
+  --purple: #7b1fa2;
+  --orange: #ef6c00;
+  --outline: #c4c7c5;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.05);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+  --serif: 'IBM Plex Serif', Georgia, serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--on-surface);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* Tooltip system */
+.term {
+  color: var(--primary);
+  border-bottom: 1px dashed rgba(26,115,232,0.4);
+  cursor: help;
+  text-decoration: none;
+  transition: border-color 0.2s;
+}
+.term:hover { border-bottom-color: var(--primary); }
+
+.tooltip-overlay { display: none; position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,0.25); }
+.tooltip-overlay.show { display: block; }
+
+.tooltip-popup {
+  display: none; position: fixed; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--outline);
+  border-radius: var(--radius); padding: 1.2rem 1.4rem;
+  max-width: 380px; width: 92vw; box-shadow: var(--shadow-lg);
+  font-size: 0.88rem; line-height: 1.65;
+  animation: tooltipIn 0.15s ease-out;
+}
+.tooltip-popup.show { display: block; }
+
+.tooltip-popup .tt-title {
+  font-family: var(--mono); font-size: 0.7rem;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--primary); margin-bottom: 0.5rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.tooltip-popup .tt-close {
+  cursor: pointer; font-size: 1.1rem; color: var(--on-surface-dim);
+  background: none; border: none; padding: 0 0.2rem; line-height: 1;
+}
+.tooltip-popup .tt-close:hover { color: var(--error); }
+.tooltip-popup .tt-body { color: var(--on-surface-dim); }
+.tooltip-popup .tt-body strong { color: var(--on-surface); }
+
+.tooltip-popup .tt-example {
+  background: var(--primary-light); border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem; margin-top: 0.6rem;
+  font-size: 0.82rem; color: var(--on-surface-dim);
+  border-left: 3px solid var(--primary);
+}
+
+@keyframes tooltipIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Hero, BLUF, Nav, Sections, Cards, etc. — exact same as Spanner/Lamport */
+.hero { padding: 6rem 2rem 4rem; text-align: center; background: var(--surface); border-bottom: 1px solid var(--outline); }
+.hero-chip { display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); background: var(--primary-light); padding: 0.35rem 1rem; border-radius: 100px; margin-bottom: 1.5rem; }
+.hero h1 { font-family: var(--serif); font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 700; line-height: 1.2; max-width: 700px; margin: 0 auto; }
+.hero-sub { font-size: 1.05rem; color: var(--on-surface-dim); max-width: 560px; margin: 1.2rem auto 0; }
+.hero-author { font-family: var(--mono); font-size: 0.78rem; color: var(--on-surface-faint); margin-top: 1.5rem; }
+
+.bluf { background: var(--success); color: #fff; padding: 1.5rem 2rem; text-align: center; font-size: 1.1rem; font-weight: 500; border-bottom: 1px solid var(--outline); }
+
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--outline); padding: 0.6rem 0;
+  display: flex; justify-content: center; gap: 0.2rem; flex-wrap: wrap;
+}
+.nav a {
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--on-surface-dim); text-decoration: none;
+  padding: 0.4rem 0.8rem; border-radius: 100px; transition: all 0.2s;
+}
+.nav a:hover, .nav a.active { color: var(--primary); background: var(--primary-light); }
+
+.section { max-width: 860px; margin: 0 auto; padding: 4rem 1.5rem; }
+.section-label { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--primary); margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem; }
+.section h2 { font-family: var(--serif); font-size: clamp(1.6rem, 3.5vw, 2.2rem); font-weight: 700; line-height: 1.25; margin-bottom: 1.2rem; }
+.section p { color: var(--on-surface-dim); margin-bottom: 1rem; max-width: 680px; }
+.section p strong { color: var(--on-surface); }
+
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 2rem 0; }
+.card { background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, transform 0.2s; }
+.card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.card-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin-bottom: 0.8rem; }
+.card-icon.blue { background: var(--primary-light); color: var(--primary); }
+.card-icon.teal { background: #e0f2f1; color: var(--teal); }
+.card-icon.orange { background: #fff3e0; color: var(--orange); }
+.card-icon.green { background: #e6f4ea; color: var(--success); }
+
+.rule-box { background: var(--surface); border: 1px solid var(--outline); border-left: 4px solid var(--primary); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 1.2rem 1.5rem; margin: 1.5rem 0; box-shadow: var(--shadow-sm); }
+.rule-box .rule-label { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary); margin-bottom: 0.4rem; }
+.rule-box code { font-family: var(--mono); font-size: 0.9rem; background: var(--surface-dim); padding: 0.15rem 0.4rem; border-radius: 4px; }
+
+.five-whys { background: #fff8e1; border: 1px solid #f9ab00; border-radius: var(--radius); padding: 1.5rem; margin: 2rem 0; }
+.five-whys h4 { font-family: var(--mono); font-size: 0.85rem; color: #e65100; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+
+.callout { background: var(--primary-light); border: 1px solid rgba(26,115,232,0.15); border-radius: var(--radius); padding: 1.5rem 1.8rem; margin: 2rem 0; }
+.callout h3 { font-size: 1.05rem; font-weight: 600; color: var(--primary-dark); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
+.callout p { color: var(--on-surface-dim); font-size: 0.92rem; }
+.callout.green { background: #e8f5e9; border-color: rgba(30,142,62,0.15); }
+.callout.green h3 { color: var(--success); }
+
+.sim-container { background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow-md); margin: 2rem 0; }
+.sim-toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.5rem; align-items: center; }
+.sim-btn { font-family: var(--sans); font-size: 0.82rem; font-weight: 500; padding: 0.5rem 1.2rem; border-radius: 100px; border: 1px solid var(--outline); background: var(--surface); color: var(--on-surface); cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem; transition: all 0.15s; }
+.sim-btn:hover { background: var(--surface-dim); }
+.sim-btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.sim-btn.primary:hover { background: var(--primary-dark); }
+.sim-canvas { width: 100%; min-height: 420px; background: var(--surface-dim); border-radius: var(--radius-sm); display: block; }
+.sim-legend { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 1rem; font-size: 0.78rem; color: var(--on-surface-dim); font-family: var(--mono); }
+.sim-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.sim-log { background: var(--on-surface); color: #a5d6a7; font-family: var(--mono); font-size: 0.75rem; border-radius: var(--radius-sm); padding: 1rem; margin-top: 1rem; max-height: 180px; overflow-y: auto; line-height: 1.6; }
+
+.steps { display: flex; flex-direction: column; gap: 0; margin: 2rem 0; position: relative; }
+.step { display: flex; gap: 1rem; align-items: flex-start; padding: 1.2rem 0; position: relative; }
+.step::before { content: ''; position: absolute; left: 17px; top: 2.8rem; bottom: 0; width: 2px; background: var(--outline); }
+.step:last-child::before { display: none; }
+.step-num { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 0.8rem; font-weight: 600; flex-shrink: 0; z-index: 1; }
+
+.cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 2rem 0; font-size: 0.88rem; background: var(--surface); border-radius: var(--radius); border: 1px solid var(--outline); overflow: hidden; }
+.cmp-table th, .cmp-table td { padding: 0.9rem 1rem; }
+.cmp-table th { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--on-surface-dim); background: var(--surface-dim); border-bottom: 1px solid var(--outline); }
+.chip { display: inline-block; font-family: var(--mono); font-size: 0.65rem; padding: 0.15rem 0.5rem; border-radius: 4px; letter-spacing: 0.04em; }
+.chip-yes { background: #e6f4ea; color: var(--success); }
+.chip-no { background: #fce8e6; color: var(--error); }
+
+.glossary-toggle { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200; background: var(--primary); color: #fff; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.3rem; cursor: pointer; box-shadow: var(--shadow-lg); }
+.glossary-panel { display: none; position: fixed; bottom: 5rem; right: 1.5rem; z-index: 200; width: 340px; max-width: 90vw; max-height: 70vh; background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius); box-shadow: var(--shadow-lg); overflow: hidden; }
+.glossary-panel.show { display: flex; flex-direction: column; }
+.glossary-panel-header { padding: 0.9rem 1.2rem; border-bottom: 1px solid var(--outline); font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); }
+.glossary-search { width: 100%; padding: 0.6rem 1rem; background: var(--surface-dim); border: none; border-bottom: 1px solid var(--outline); font-size: 0.85rem; outline: none; }
+.glossary-list { overflow-y: auto; flex: 1; padding: 0.3rem 0; }
+.glossary-item { padding: 0.6rem 1.2rem; cursor: pointer; transition: background 0.1s; border-bottom: 1px solid var(--surface-dim); }
+.glossary-item:hover { background: var(--surface-dim); }
+
+.footer { text-align: center; padding: 3rem 1.5rem; border-top: 1px solid var(--outline); font-family: var(--mono); font-size: 0.72rem; color: var(--on-surface-faint); }
+.fade-in { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease-out, transform 0.5s ease-out; }
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+@media (max-width: 600px) {
+  .section { padding: 3rem 1.2rem; }
+  .sim-container { padding: 1.2rem; }
+  .nav a { font-size: 0.6rem; padding: 0.3rem 0.5rem; }
+  .glossary-panel { right: 0.5rem; bottom: 4.5rem; width: calc(100vw - 1rem); }
+  .glossary-toggle { bottom: 1rem; right: 1rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- Tooltip system -->
+<div class="tooltip-overlay" id="tooltipOverlay"></div>
+<div class="tooltip-popup" id="tooltipPopup">
+  <div class="tt-title"><span id="ttTitle"></span><button class="tt-close" id="ttClose">✕</button></div>
+  <div class="tt-body" id="ttBody"></div>
+</div>
+
+<!-- BLUF -->
+<div class="bluf">
+  <strong>BLUF (Bottom Line Up Front):</strong> MapReduce is a simple way to process enormous amounts of data across thousands of cheap computers. You only write two small functions — Map and Reduce — and the system automatically splits the work, moves data around, handles failures, and gives you the final answer.
+</div>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-chip"><span class="material-icons-round" style="font-size:0.85rem">storage</span> OSDI · 2004</div>
+  <h1>MapReduce: Simplified Data Processing on Large Clusters</h1>
+  <p class="hero-sub">The paper that taught the world how to process petabytes of data on thousands of machines — without needing to become an expert in distributed systems.</p>
+  <p class="hero-author">Jeffrey Dean, Sanjay Ghemawat · Google</p>
+</div>
+
+<!-- Nav -->
+<nav class="nav" id="nav">
+  <a href="#problem">The Problem</a>
+  <a href="#model">The Model</a>
+  <a href="#howitworks">How It Works</a>
+  <a href="#simulator">Simulator</a>
+  <a href="#fault">Fault Tolerance</a>
+  <a href="#optimizations">Optimizations</a>
+  <a href="#legacy">Legacy</a>
+</nav>
+
+<!-- Problem -->
+<section class="section" id="problem">
+  <div class="fade-in">
+    <div class="section-label"><span class="material-icons-round">help_outline</span> 01 — The Problem</div>
+    <h2>Processing huge data used to be incredibly hard</h2>
+    <p>Imagine you have 100 terabytes of web pages and you want to count how often each word appears. Doing this on one computer would take months. So you buy 1,000 cheap machines — but now you have to write code that splits the data, sends pieces to each machine, collects the answers, deals with machines crashing, and makes sure nothing gets lost. That’s a nightmare.</p>
+    
+    <div class="five-whys fade-in">
+      <h4><span class="material-icons-round">psychology</span> 5 Whys — Why processing big data was so painful</h4>
+      <ol>
+        <li>Why? One computer is too slow for petabytes of data.</li>
+        <li>Why? You need thousands of machines working together.</li>
+        <li>Why? Writing code that coordinates thousands of machines is extremely complicated.</li>
+        <li>Why? You have to manually handle splitting work, moving data, failures, and combining results.</li>
+        <li>Why? There was no simple, reusable way to do it — until MapReduce.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- The Model -->
+<section class="section" id="model">
+  <div class="fade-in">
+    <div class="section-label"><span class="material-icons-round">code</span> 02 — The MapReduce Model</div>
+    <h2>Two simple functions are all you need</h2>
+    <p>MapReduce asks you to write just two plain functions:</p>
+    <div class="rule-box fade-in">
+      <div class="rule-label">Map function</div>
+      <p><code>map(key, value) → list of (key2, value2)</code></p>
+      <p style="margin-top:0.5rem;color:var(--on-surface-dim);">Takes one piece of input and produces zero or more intermediate key-value pairs.</p>
+    </div>
+    <div class="rule-box fade-in">
+      <div class="rule-label">Reduce function</div>
+      <p><code>reduce(key2, list of value2) → list of output</code></p>
+      <p style="margin-top:0.5rem;color:var(--on-surface-dim);">Takes all values that share the same key and produces the final result.</p>
+    </div>
+
+    <div class="five-whys fade-in">
+      <h4><span class="material-icons-round">psychology</span> 5 Whys — Why only two functions?</h4>
+      <ol>
+        <li>Why two functions? Because most big data jobs are “group by key and then do something with each group.”</li>
+        <li>Why separate Map and Reduce? Map turns raw data into useful pairs; Reduce combines everything that belongs together.</li>
+        <li>Why keep them simple? So programmers don’t have to think about networks, crashes, or load balancing.</li>
+        <li>Why does this scale? The system can run thousands of Map tasks and thousands of Reduce tasks in parallel.</li>
+        <li>Why is this powerful? Almost every big-data problem (word count, log analysis, graph processing) fits this pattern.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section class="section" id="howitworks">
+  <div class="fade-in">
+    <div class="section-label"><span class="material-icons-round">account_tree</span> 03 — How It Works</div>
+    <h2>The system does all the hard parts</h2>
+    <div class="steps fade-in">
+      <div class="step"><div class="step-num">1</div><div class="step-content"><h4>Split the data</h4><p>Input files are automatically broken into 16–64 MB chunks.</p></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-content"><h4>Run Map tasks</h4><p>Each chunk is sent to a worker machine that runs the Map function.</p></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-content"><h4>Shuffle &amp; sort</h4><p>Intermediate results are grouped by key and sent to the right Reduce workers.</p></div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-content"><h4>Run Reduce tasks</h4><p>Each Reduce worker gets all values for one key and runs your Reduce function.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Interactive Simulator -->
+<section class="section" id="simulator">
+  <div class="fade-in">
+    <div class="section-label"><span class="material-icons-round">play_circle</span> 04 — Interactive MapReduce Simulator</div>
+    <h2>Watch Map → Shuffle → Reduce in real time</h2>
+    <p>Click a worker = run a Map task (Word Count example).<br>Drag between workers = simulate shuffling data to reducers.<br>Watch the system automatically handle the entire job.</p>
+  </div>
+
+  <div class="sim-container fade-in">
+    <div class="sim-toolbar">
+      <button class="sim-btn primary" onclick="resetSim()"><span class="material-icons-round">refresh</span> Reset</button>
+      <button class="sim-btn" onclick="runPreset()"><span class="material-icons-round">auto_fix_high</span> Run Full Example</button>
+      <button class="sim-btn" onclick="simulateFault()"><span class="material-icons-round">error</span> Simulate Crash</button>
+      <span style="font-size:0.78rem; color:var(--on-surface-faint); margin-left: 0.5rem;">Click worker = Map task · Drag = Shuffle to Reduce</span>
+    </div>
+
+    <canvas id="simCanvas" class="sim-canvas"></canvas>
+
+    <div class="sim-legend">
+      <span><span class="sim-legend-dot" style="background:#1a73e8"></span> Worker</span>
+      <span><span class="sim-legend-dot" style="background:#1e8e3e"></span> Map task</span>
+      <span><span class="sim-legend-dot" style="background:#ef6c00"></span> Reduce task</span>
+      <span>〰️ Shuffle</span>
+    </div>
+
+    <div class="sim-log" id="simLog">// MapReduce simulator ready. Try clicking or dragging!</div>
+  </div>
+</section>
+
+<!-- Fault Tolerance -->
+<section class="section" id="fault">
+  <div class="fade-in">
+    <div class="section-label"><span class="material-icons-round">security</span> 05 — Fault Tolerance</div>
+    <h2>When machines crash, the job keeps going</h2>
+    <p>The system automatically re-runs any failed Map or Reduce task on another worker. It also keeps multiple copies of data so nothing is lost.</p>
+    
+    <div class="five-whys fade-in">
+      <h4><span class="material-icons-round">psychology</span> 5 Whys — Why fault tolerance is built in</h4>
+      <ol>
+        <li>Why? With thousands of machines, some will always be broken or slow.</li>
+        <li>Why? You can’t afford to restart the entire job every time one fails.</li>
+        <li>Why? The master keeps track of every task and its progress.</li>
+        <li>Why? Re-running a single small task is cheap and fast.</li>
+        <li>Why does this work so well? The job finishes even if dozens of machines die.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- Optimizations -->
+<section class="section" id="optimizations">
+  <div class="fade-in">
+    <div class="section-label"><span class="material-icons-round">speed</span> 06 — Clever Optimizations</div>
+    <h2>Extra tricks that make it fast</h2>
+    <div class="card-grid fade-in">
+      <div class="card">
+        <div class="card-icon teal"><span class="material-icons-round">flash_on</span></div>
+        <h3>Combiner</h3>
+        <p>Runs a mini-reduce on each Map worker before shuffling — reduces network traffic dramatically.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon orange"><span class="material-icons-round">save</span></div>
+        <h3>Backup tasks</h3>
+        <p>When a task is slow, the system starts a backup copy on another machine and takes the first one that finishes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Legacy -->
+<section class="section" id="legacy">
+  <div class="fade-in">
+    <div class="section-label"><span class="material-icons-round">history_edu</span> 07 — Legacy &amp; Influence</div>
+    <h2>Why this paper changed the world</h2>
+    <p>MapReduce became the foundation for the entire big-data revolution. It directly inspired Hadoop, Spark, Flink, and almost every modern data-processing system.</p>
+  </div>
+
+  <div class="card-grid fade-in">
+    <div class="card">
+      <div class="card-icon purple"><span class="material-icons-round">cloud</span></div>
+      <h3>Hadoop</h3>
+      <p>The open-source version that powers Yahoo, Facebook, and thousands of companies.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon teal"><span class="material-icons-round">bolt</span></div>
+      <h3>Apache Spark</h3>
+      <p>Built on the same MapReduce ideas but much faster and more general.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon orange"><span class="material-icons-round">public</span></div>
+      <h3>Modern cloud tools</h3>
+      <p>Google Cloud Dataflow, AWS EMR, Azure Synapse — all trace their roots back to this paper.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Glossary button -->
+<button class="glossary-toggle" id="glossaryBtn" title="Open glossary"><span class="material-icons-round">menu_book</span></button>
+<div class="glossary-panel" id="glossaryPanel">
+  <div class="glossary-panel-header">📖 Glossary of MapReduce Terms</div>
+  <input type="text" class="glossary-search" id="glossarySearch" placeholder="Search terms...">
+  <div class="glossary-list" id="glossaryList"></div>
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+  <p>Interactive explainer for the 2004 OSDI paper <a href="https://research.google/pubs/pub62/" target="_blank">"MapReduce: Simplified Data Processing on Large Clusters"</a> — built as a companion to the Lamport Clocks and Spanner explainers.</p>
+  <p style="margin-top:0.4rem; opacity:0.6;">Tap any <span style="color:var(--primary)">blue underlined term</span> for a plain-English explanation. All concepts explained from first principles using the 5 Whys.</p>
+</footer>
+
+<script>
+// GLOSSARY — all from first principles
+const glossary = {
+  "map": {
+    title: "Map Function",
+    body: "A small piece of code you write that takes one piece of input data and turns it into zero or more intermediate key-value pairs. Think of it as 'extract useful facts' from each record.",
+    example: "For word count: map('document1', 'the quick brown fox') → [('the',1), ('quick',1), ('brown',1), ('fox',1)]"
+  },
+  "reduce": {
+    title: "Reduce Function",
+    body: "A small piece of code you write that takes all the values that share the same key and combines them into a final result. Think of it as 'summarize everything for this key'.",
+    example: "For word count: reduce('the', [1,1,1,1]) → 4"
+  },
+  "shuffle": {
+    title: "Shuffle",
+    body: "The step where the system automatically moves all intermediate key-value pairs so that every Reduce task receives all the values for its keys. The system handles the sorting and grouping for you.",
+    example: "All pairs with key 'the' from every Map task are collected together and sent to the same Reduce worker."
+  },
+  "master": {
+    title: "Master",
+    body: "A single coordinating program that tells workers what to do, keeps track of progress, and re-assigns failed tasks. It is the only central piece — everything else runs in parallel.",
+    example: "When a worker crashes, the master notices and tells another worker to redo the lost task."
+  }
+};
+
+// Tooltip & Glossary panel (identical to previous pages)
+const tooltipPopup = document.getElementById('tooltipPopup');
+const tooltipOverlay = document.getElementById('tooltipOverlay');
+const ttTitle = document.getElementById('ttTitle');
+const ttBody = document.getElementById('ttBody');
+const ttClose = document.getElementById('ttClose');
+
+function showTooltip(termKey, anchorEl) {
+  const entry = glossary[termKey];
+  if (!entry) return;
+  ttTitle.textContent = entry.title;
+  let html = `<div>${entry.body}</div>`;
+  if (entry.example) html += `<div class="tt-example"><strong>Example:</strong> ${entry.example}</div>`;
+  ttBody.innerHTML = html;
+  tooltipPopup.classList.add('show');
+  tooltipOverlay.classList.add('show');
+  const rect = anchorEl.getBoundingClientRect();
+  let top = rect.bottom + 8, left = rect.left + rect.width/2 - 180;
+  if (left < 8) left = 8;
+  if (left + 360 > window.innerWidth - 8) left = window.innerWidth - 368;
+  if (top + 250 > window.innerHeight) top = rect.top - 250;
+  if (top < 8) top = 8;
+  tooltipPopup.style.top = top + 'px';
+  tooltipPopup.style.left = left + 'px';
+}
+function hideTooltip() { tooltipPopup.classList.remove('show'); tooltipOverlay.classList.remove('show'); }
+
+document.addEventListener('click', e => {
+  const term = e.target.closest('.term');
+  if (term) { e.preventDefault(); showTooltip(term.dataset.term, term); return; }
+  if (!e.target.closest('.tooltip-popup') && !e.target.closest('.glossary-panel')) hideTooltip();
+});
+ttClose.addEventListener('click', hideTooltip);
+tooltipOverlay.addEventListener('click', hideTooltip);
+
+// Glossary panel
+const glossaryBtn = document.getElementById('glossaryBtn');
+const glossaryPanel = document.getElementById('glossaryPanel');
+const glossaryList = document.getElementById('glossaryList');
+const glossarySearch = document.getElementById('glossarySearch');
+
+glossaryBtn.addEventListener('click', () => {
+  glossaryPanel.classList.toggle('show');
+  if (glossaryPanel.classList.contains('show')) { renderGlossary(''); glossarySearch.focus(); }
+});
+glossarySearch.addEventListener('input', e => renderGlossary(e.target.value));
+
+function renderGlossary(filter) {
+  const f = filter.toLowerCase();
+  const items = Object.entries(glossary)
+    .filter(([k,v]) => v.title.toLowerCase().includes(f) || v.body.toLowerCase().includes(f))
+    .sort((a,b) => a[1].title.localeCompare(b[1].title));
+  glossaryList.innerHTML = items.map(([k,v]) =>
+    `<div class="glossary-item" data-gterm="${k}">
+      <div class="glossary-item-term">${v.title}</div>
+      <div class="glossary-item-preview">${v.body.replace(/<[^>]*>/g,'').substring(0,75)}…</div>
+    </div>`).join('');
+  glossaryList.querySelectorAll('.glossary-item').forEach(item =>
+    item.addEventListener('click', () => { glossaryPanel.classList.remove('show'); showTooltip(item.dataset.gterm, item); }));
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.glossary-panel') && !e.target.closest('.glossary-toggle')) glossaryPanel.classList.remove('show');
+});
+
+// ─────────────────────────────────────────────
+// MAPREDUCE SIMULATOR (fully working)
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+const logEl = document.getElementById('simLog');
+
+const NUM_WORKERS = 5;
+const PROC_COLORS = ['#1a73e8', '#1e8e3e', '#ef6c00', '#7b1fa2', '#00897b'];
+let workers = Array(NUM_WORKERS).fill().map(() => ({ maps: [], reduces: [], crashed: false }));
+let shuffleArrows = [];
+let width = 0, height = 0;
+
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  width = rect.width;
+  height = 420;
+  canvas.width = width * (window.devicePixelRatio || 1);
+  canvas.height = height * (window.devicePixelRatio || 1);
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+}
+
+function workerX(i) { return 80 + i * ((width - 160) / (NUM_WORKERS - 1)); }
+
+function addLog(msg) {
+  let lines = logEl.textContent.split('\n');
+  lines.push(msg);
+  if (lines.length > 30) lines.shift();
+  logEl.textContent = lines.join('\n');
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function draw() {
+  if (!width) return;
+  const dpr = window.devicePixelRatio || 1;
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, width, height);
+
+  // Workers
+  for (let i = 0; i < NUM_WORKERS; i++) {
+    const x = workerX(i);
+    ctx.beginPath();
+    ctx.moveTo(x, 30); ctx.lineTo(x, height - 30);
+    ctx.strokeStyle = workers[i].crashed ? '#d93025' : PROC_COLORS[i];
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.font = '600 14px IBM Plex Mono';
+    ctx.fillStyle = workers[i].crashed ? '#d93025' : PROC_COLORS[i];
+    ctx.textAlign = 'center';
+    ctx.fillText(`W${i+1}`, x, 20);
+
+    // Map tasks
+    workers[i].maps.forEach((y, idx) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#1e8e3e';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = '500 9px IBM Plex Mono';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText('MAP', x, y + 3);
+    });
+
+    // Reduce tasks
+    workers[i].reduces.forEach((y, idx) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#ef6c00';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = '500 9px IBM Plex Mono';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText('RED', x, y + 3);
+    });
+  }
+
+  // Shuffle arrows
+  ctx.strokeStyle = '#999';
+  ctx.lineWidth = 1.5;
+  shuffleArrows.forEach(arrow => {
+    const x1 = workerX(arrow.from), x2 = workerX(arrow.to);
+    ctx.beginPath();
+    ctx.moveTo(x1, arrow.y1);
+    ctx.lineTo(x2, arrow.y2);
+    ctx.setLineDash([3, 2]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  ctx.font = '400 10px IBM Plex Sans';
+  ctx.fillStyle = '#999';
+  ctx.textAlign = 'center';
+  ctx.fillText('time →  (Map → Shuffle → Reduce)', width / 2, height - 8);
+  ctx.restore();
+}
+
+// Interaction
+let mouseDown = false, startWorker = -1, startY = 0;
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const w = Math.round((x - 80) / ((width - 160) / (NUM_WORKERS - 1)));
+  if (w >= 0 && w < NUM_WORKERS && !workers[w].crashed && y > 40 && y < height - 40) {
+    mouseDown = true;
+    startWorker = w;
+    startY = y;
+    // Add map task
+    workers[w].maps.push(y);
+    addLog(`Worker W${w+1} started MAP task`);
+    draw();
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (!mouseDown) return;
+  mouseDown = false;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const endWorker = Math.round((x - 80) / ((width - 160) / (NUM_WORKERS - 1)));
+  if (endWorker >= 0 && endWorker < NUM_WORKERS && endWorker !== startWorker) {
+    shuffleArrows.push({ from: startWorker, to: endWorker, y1: startY, y2: startY + 30 + Math.random() * 40 });
+    workers[endWorker].reduces.push(startY + 60);
+    addLog(`Shuffled data from W${startWorker+1} → W${endWorker+1}`);
+    draw();
+  }
+});
+
+function resetSim() {
+  workers = Array(NUM_WORKERS).fill().map(() => ({ maps: [], reduces: [], crashed: false }));
+  shuffleArrows = [];
+  logEl.textContent = '// MapReduce simulator reset';
+  draw();
+}
+
+function runPreset() {
+  resetSim();
+  setTimeout(() => { workers[0].maps.push(80); addLog('W1: MAP started'); draw(); }, 100);
+  setTimeout(() => { workers[1].maps.push(110); addLog('W2: MAP started'); draw(); }, 300);
+  setTimeout(() => { workers[2].maps.push(140); addLog('W3: MAP started'); draw(); }, 500);
+  setTimeout(() => { shuffleArrows.push({from:0,to:3,y1:100,y2:160}); workers[3].reduces.push(160); addLog('Shuffle → Reduce'); draw(); }, 800);
+  setTimeout(() => { addLog('✅ Job completed successfully'); }, 1100);
+}
+
+function simulateFault() {
+  const crashed = Math.floor(Math.random() * NUM_WORKERS);
+  if (!workers[crashed].crashed) {
+    workers[crashed].crashed = true;
+    addLog(`💥 Worker W${crashed+1} crashed! Master is re-assigning tasks...`);
+    // Simulate recovery
+    setTimeout(() => {
+      workers[crashed].crashed = false;
+      addLog(`✅ Task recovered on another worker`);
+      draw();
+    }, 1200);
+    draw();
+  }
+}
+
+// Init
+window.addEventListener('resize', () => { resizeCanvas(); draw(); });
+resizeCanvas();
+draw();
+addLog('// Click a worker = start Map task');
+addLog('// Drag between workers = shuffle data to Reduce');
+
+// Scroll & nav
+const observer = new IntersectionObserver(entries => { entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }); }, { threshold: 0.1 });
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+const sections = document.querySelectorAll('.section');
+const navLinks = document.querySelectorAll('.nav a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => { if (scrollY >= s.offsetTop - 120) current = s.id; });
+  navLinks.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + current));
+});
+</script>
+</body>
+</html>
