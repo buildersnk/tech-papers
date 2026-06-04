@@ -91,14 +91,46 @@
     const openNew = document.getElementById("openNew");
     const SELF = "index.html";
 
-    function show(file) {
+    async function show(file) {
       if (!file) return;
-      frame.src = file;
       openNew.href = file;
       location.hash = encodeURIComponent(file);
+
+      if (file.toLowerCase().endsWith(".jsx")) {
+        try {
+          const res = await fetch(file);
+          let src = await res.text();
+          // Strip ES module imports and collect React hooks used
+          const hooks = [];
+          src = src.replace(/^import\s*\{([^}]+)\}\s*from\s*["']react["'];?\s*\n/gm, (_, names) => {
+            hooks.push(...names.split(",").map(n => n.trim()).filter(Boolean));
+            return "";
+          });
+          // Remove `export default` so the function becomes a plain declaration
+          src = src.replace(/^export default /m, "");
+          const destructure = hooks.length ? `const { ${hooks.join(", ")} } = React;\n` : "";
+          const html = `<!DOCTYPE html><html><head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"><\/script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"><\/script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+</head><body><div id="root"></div>
+<script type="text/babel" data-presets="react">
+${destructure}${src}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+<\/script></body></html>`;
+          const blob = new Blob([html], { type: "text/html" });
+          frame.src = URL.createObjectURL(blob);
+        } catch (err) {
+          status.textContent = `Failed to load JSX: ${err.message}`;
+        }
+      } else {
+        frame.src = file;
+      }
     }
 
-    picker.addEventListener("change", () => show(picker.value));
+    picker.addEventListener("change", () => show(picker.value).catch(console.error));
 
     async function loadList() {
       const api = `https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`;
@@ -107,7 +139,7 @@
         if (!res.ok) throw new Error(`GitHub API ${res.status}`);
         const data = await res.json();
         const files = data.tree
-          .filter(n => n.type === "blob" && n.path.toLowerCase().endsWith(".html"))
+          .filter(n => n.type === "blob" && /\.(html|jsx)$/i.test(n.path))
           .map(n => n.path)
           .filter(p => p !== SELF)
           .sort();
